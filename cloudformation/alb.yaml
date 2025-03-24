@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Application Load Balancer & Target Group for Ghost Blog
+
+Resources:
+  # ALB (Application Load Balancer)
+  GhostALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !ImportValue GhostALBSecurityGroupId
+      Subnets:
+        - !ImportValue GhostPublicSubnet1Id
+        - !ImportValue GhostPublicSubnet2Id
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: "60"
+    DeletionPolicy: Delete
+
+  # Target Group for ECS tasks
+  GhostTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 2368
+      Protocol: HTTP
+      VpcId: !ImportValue GhostVPCId
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  # HTTP Listener only
+  GhostALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - GhostALB
+      - GhostTargetGroup
+    Properties:
+      LoadBalancerArn: !Ref GhostALB
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GhostTargetGroup
+    DeletionPolicy: Delete
+
+Outputs:
+  GhostALBArn:
+    Description: "ARN of the ALB"
+    Value: !Ref GhostALB
+    Export:
+      Name: GhostALBArn
+
+  ALBDNS:
+    Description: "DNS name of the ALB"
+    Value: !GetAtt GhostALB.DNSName
+    Export:
+      Name: GhostALBDNS
+
+  TargetGroupArn:
+    Description: "ARN of the Target Group"
+    Value: !Ref GhostTargetGroup
+    Export:
+      Name: GhostTargetGroupArn
