@@ -1,76 +1,47 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Aurora MySQL RDS Cluster for Ghost Blog (AWS Best Practices, MVP)
+Description: Aurora MySQL RDS Cluster for Ghost Blog
 
-# Parametrit mahdollistavat templaten joustavan käytön eri ympäristöissä.
-Parameters:
-  DBUsername:
-    Type: String
-    Description: "Tietokannan pääkäyttäjän nimi (oletus: ghostadmin)"
-    Default: ghostadmin
-
-  DBPassword:
-    Type: String
-    Description: "Tietokannan salasana (vähintään 8 merkkiä)."
-    NoEcho: true  # Salasana ei näy selkokielisenä AWS:ssä
-
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: "Valitse olemassa oleva VPC, johon tietokanta sijoitetaan."
-
-  Subnets:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: "Valitse subnetit Aurora-tietokannalle (vähintään 2 subnettiä eri AZ:ssa)."
-
-# Itse resurssit luodaan tässä:
 Resources:
 
-  # Subnet Group tarvitaan Aurora-tietokannan käyttöönottoon vähintään kahteen eri AZ:aan (Availability Zone).
+  # Aurora Subnet Group (required to deploy across multiple Availability Zones)
   GhostDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: "Aurora Subnet Group"
-      SubnetIds: !Ref Subnets
+      SubnetIds:
+        - !ImportValue GhostPrivateSubnet1Id
+        - !ImportValue GhostPrivateSubnet2Id
 
-  # Security Group määrittää, kuka saa ottaa yhteyttä Aurora-tietokantaan.
-  GhostDBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Security Group Aurora-tietokannalle"
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 0.0.0.0/0  # Väliaikainen avoin yhteys MVP-vaiheessa
-          # # # TODO Sallitaan yhteys ainoastaan ECS-sovelluksen Security Groupista (AppSecurityGroup luodaan myöhemmin)
-          # # SourceSecurityGroupId: !Ref AppSecurityGroup
-
-  # Aurora-tietokantaklusteri, johon liittyy varsinainen data ja hallinta
+  # Aurora DB Cluster (stores the actual data)
   GhostAuroraCluster:
     Type: AWS::RDS::DBCluster
     Properties:
       Engine: aurora-mysql
-      EngineVersion: "5.7.mysql_aurora.2.11.3"  # vakaa versio
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      EngineVersion: "8.0.mysql_aurora.3.05.2"
+      MasterUsername: !Sub "{{resolve:secretsmanager:GhostDBCredentials:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:GhostDBCredentials:SecretString:password}}"
       DBSubnetGroupName: !Ref GhostDBSubnetGroup
       VpcSecurityGroupIds:
-        - !Ref GhostDBSecurityGroup
-      BackupRetentionPeriod: 3  # Lyhyempi backup-aika kustannusten säästämiseksi
-      StorageEncrypted: true    # Levyt salattuja (AWS:n suositus)
-      DeletionProtection: false # Voidaan helposti poistaa MVP-vaiheessa
+        - !ImportValue GhostDBSecurityGroupId
+      BackupRetentionPeriod: 1  # Retain snapshots for 1 day (minimal cost)
+      PreferredBackupWindow: "03:00-04:00"
+      StorageEncrypted: true
+      DeletionProtection: false
 
-  # Varsinainen tietokanta-instanssi klusterin sisällä, kustannustehokas pieni instanssi MVP:lle.
+  # Aurora DB Instance (smallest and cheapest for MVP)
   GhostAuroraInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
     Properties:
       DBClusterIdentifier: !Ref GhostAuroraCluster
-      DBInstanceClass: db.t3.small  # Kustannustehokas vaihtoehto MVP:lle
+      DBInstanceClass: db.t4g.medium
       Engine: aurora-mysql
-      PubliclyAccessible: false  # Tietokanta EI ole julkisesti saavutettavissa internetistä (AWS paras käytäntö)
+      PubliclyAccessible: false
 
-# Outputs-osiossa määritetään tiedot, joita tarvitaan jatkossa ECS-palvelussa tai muissa templateissa.
 Outputs:
+
   AuroraEndpoint:
-    Description: "Aurora DB endpoint, jota ECS-sovellus käyttää."
+    Description: "Aurora DB endpoint used by ECS app"
     Value: !GetAtt GhostAuroraCluster.Endpoint.Address
+    Export:
+      Name: GhostAuroraEndpoint
