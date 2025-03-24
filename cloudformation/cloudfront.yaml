@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFront Distribution for Ghost Blog
+
+Resources:
+  GhostCloudFront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: "CloudFront distribution for Ghost Blog"
+        DefaultRootObject: "index.html"
+        Origins:
+          - Id: GhostALBOrigin
+            DomainName: !ImportValue GhostALBDNS  # ALB DNS name
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only  # Use HTTP as ALB does not support HTTPS
+        DefaultCacheBehavior:
+          TargetOriginId: GhostALBOrigin
+          ViewerProtocolPolicy: redirect-to-https  # Enforce HTTPS to users
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: all
+          # Response header policy added to support security and CORS in future
+          ResponseHeadersPolicyId: !Ref GhostResponseHeadersPolicy
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true  # Free certificate provided by AWS
+        PriceClass: PriceClass_100  # Lowest cost tier (North America and Europe only)
+
+  # Response headers for security and CORS (future-proofing)
+  GhostResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: GhostSecurityHeadersPolicy
+        Comment: Security headers for Ghost blog
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          XSSProtection:
+            Protection: true
+            ModeBlock: true
+            Override: true
+
+Outputs:
+  GhostCloudFrontDomain:
+    Description: "CloudFront distribution domain name"
+    Value: !GetAtt GhostCloudFront.DomainName
+    Export:
+      Name: GhostCloudFrontDomain
