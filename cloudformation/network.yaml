@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "VPC ja verkkoresurssit ECS Fargate ja Aurora RDS:lle"
+Description: "VPC and networking resources for ECS Fargate and Aurora RDS"
 
 Resources:
+
   GhostVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -12,7 +13,7 @@ Resources:
         - Key: Name
           Value: ghost-vpc
 
-  # Internet Gateway attached to VPC because Fargate needs to get docker images from internet
+  # Internet Gateway attached to VPC because Fargate needs to download Docker images
   InternetGateway:
     Type: AWS::EC2::InternetGateway
 
@@ -44,6 +45,32 @@ Resources:
         - Key: Name
           Value: ghost-public-subnet-2
 
+  # Security groups
+  # App Security Group for ECS tasks
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "App Security Group for ECS tasks (Ghost HTTP & DB connections)"
+      VpcId: !Ref GhostVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2368
+          ToPort: 2368
+          CidrIp: 0.0.0.0/0  # Ghost blog HTTP open to everyone. TODO: restrict!
+
+  # DB Security Group (only accepts traffic from app SG)
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Aurora MySQL Security Group (allows access from App SG only)"
+      VpcId: !Ref GhostVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+
+  # Security Group for ALB
   GhostALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -53,9 +80,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0  # TODO, this is only for MVP. Restrict later!
+          CidrIp: 0.0.0.0/0  # TODO: restrict this later
 
 
+  # Route table for public subnets (internet-bound traffic)
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref GhostVPC
@@ -68,9 +97,8 @@ Resources:
     DependsOn: AttachInternetGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: "0.0.0.0/0"   # TODO should be restricted also?
+      DestinationCidrBlock: "0.0.0.0/0"  # TODO: review this later
       GatewayId: !Ref InternetGateway
-
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -84,8 +112,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-
-  # Private subnets for RDS Aurora db
+  # Private subnets for RDS
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -108,17 +135,17 @@ Resources:
         - Key: Name
           Value: ghost-private-subnet-2
 
-  # VPC Endpoint so that ECS tasks can connect to Secrets Manager without public internet connection
+  # SG for VPC Endpoint to access Secrets Manager from ECS tasks
   SecretsManagerVPCEndpointSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "Security Group for Secrets Manager VPC Endpoint"
+      GroupDescription: "SG for Secrets Manager VPC Endpoint"
       VpcId: !Ref GhostVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          SourceSecurityGroupId: !ImportValue GhostAppSecurityGroupId  # ECS-task's Security Group
+          SourceSecurityGroupId: !Ref AppSecurityGroup
       Tags:
         - Key: Name
           Value: ghost-secrets-manager-vpc-sg
@@ -136,7 +163,7 @@ Resources:
         - !Ref SecretsManagerVPCEndpointSG
       PrivateDnsEnabled: true
 
-  # NAT Gateway for ECS Fargate for getting docker images
+  # NAT Gateway for ECS Fargate to download Docker images
   GhostNATGateway:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -149,8 +176,7 @@ Resources:
     Properties:
       Domain: vpc
 
-
-  # Routetable for private subnets (routing through NAT gateway to internet)
+  # Private route table with NAT
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -179,10 +205,10 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-
 Outputs:
+
   SecretsManagerVPCEndpointSGId:
-    Description: "Security Group ID for Secrets Manager VPC Endpoint"
+    Description: "SG ID for Secrets Manager VPC Endpoint"
     Value: !Ref SecretsManagerVPCEndpointSG
     Export:
       Name: GhostSecretsManagerVPCEndpointSGId
@@ -194,33 +220,43 @@ Outputs:
       Name: GhostVPCId
 
   PublicSubnet1Id:
-    Description: "Julkinen Subnet 1"
+    Description: "Public Subnet 1"
     Value: !Ref PublicSubnet1
     Export:
       Name: GhostPublicSubnet1Id
 
   PublicSubnet2Id:
-    Description: "Julkinen Subnet 2"
+    Description: "Public Subnet 2"
     Value: !Ref PublicSubnet2
     Export:
       Name: GhostPublicSubnet2Id
 
   PrivateSubnet1Id:
-    Description: "Privaatti Subnet 1"
+    Description: "Private Subnet 1"
     Value: !Ref PrivateSubnet1
     Export:
       Name: GhostPrivateSubnet1Id
 
   PrivateSubnet2Id:
-    Description: "Privaatti Subnet 2"
+    Description: "Private Subnet 2"
     Value: !Ref PrivateSubnet2
     Export:
       Name: GhostPrivateSubnet2Id
 
   GhostALBSecurityGroupId:
-    Description: "Security Group ID for ALB"
+    Description: "SG ID for ALB"
     Value: !Ref GhostALBSecurityGroup
     Export:
       Name: GhostALBSecurityGroupId
 
+  AppSecurityGroupId:
+    Description: "App Security Group ID"
+    Value: !Ref AppSecurityGroup
+    Export:
+      Name: GhostAppSecurityGroupId
 
+  DBSecurityGroupId:
+    Description: "Aurora DB Security Group ID"
+    Value: !Ref DBSecurityGroup
+    Export:
+      Name: GhostDBSecurityGroupId
