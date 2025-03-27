@@ -1,11 +1,18 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: ECS Fargate Service & Task Definition for Ghost Blog (MVP)
 
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (e.g., dev, test, prod)
+    Default: dev
+    AllowedValues: [dev, test, prod]
+
 Resources:
   GhostTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: ghost-blog-task
+      Family: !Sub "${Environment}-ghost-blog-task"
       Cpu: "512"
       Memory: "1024"
       NetworkMode: awsvpc
@@ -21,7 +28,7 @@ Resources:
           Environment:
             - Name: url
               Value: !Sub
-                - "https://${domain}"
+                - "http://${domain}"
                 - domain: !ImportValue GhostALBDNS
             - Name: database__client
               Value: mysql
@@ -42,25 +49,30 @@ Resources:
               ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GhostDBCredentials:password::"
           RepositoryCredentials:
             CredentialsParameter: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:DockerHubCredentials"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-task-definition"
 
   GhostEcsService:
     Type: AWS::ECS::Service
     Properties:
-      ServiceName: ghost-blog-service
+      ServiceName: !Sub "${Environment}-ghost-blog-service"
       Cluster: !ImportValue ECSClusterName
       TaskDefinition: !Ref GhostTaskDefinition
-      DesiredCount: 2  # 2 instances for better fault tolerance
-      LaunchType: FARGATE  # ECS manages compute infrastructure (vs. EC2)
+      DesiredCount: 2
+      LaunchType: FARGATE
       EnableExecuteCommand: true
       HealthCheckGracePeriodSeconds: 60
       DeploymentController:
         Type: ECS
       DeploymentConfiguration:
-        MinimumHealthyPercent: 50  # Ensure at least 50% tasks are healthy during deploy
-        MaximumPercent: 200        # Allow new tasks to start before stopping old ones
+        MinimumHealthyPercent: 50
+        MaximumPercent: 200
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: DISABLED  # No public IPs — traffic goes via ALB
+          AssignPublicIp: DISABLED
           SecurityGroups:
             - !ImportValue GhostAppSecurityGroupId
             - !ImportValue GhostSecretsManagerVPCEndpointSGId
@@ -71,8 +83,15 @@ Resources:
         - TargetGroupArn: !ImportValue GhostTargetGroupArn
           ContainerName: ghost-container
           ContainerPort: 2368
+    Tags:
+      - Key: Environment
+        Value: !Ref Environment
+      - Key: Name
+        Value: !Sub "${Environment}-ghost-ecs-service"
 
 Outputs:
   ECSServiceName:
-    Description: "Name of the ECS service for later references"
+    Description: "Name of the ECS service"
     Value: !Ref GhostEcsService
+    Export:
+      Name: !Sub "${Environment}-ECSServiceName"
