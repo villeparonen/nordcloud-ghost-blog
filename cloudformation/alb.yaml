@@ -28,7 +28,7 @@ Resources:
       VpcId: !ImportValue GhostVPCId
       TargetType: ip
       HealthCheckProtocol: HTTP
-      HealthCheckPath: "/"
+      HealthCheckPath: "/favicon.ico"
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2

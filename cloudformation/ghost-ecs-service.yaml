@@ -22,7 +22,7 @@ Resources:
             - Name: url
               Value: !Sub
                 - "https://${domain}"
-                - domain: !ImportValue GhostCloudFrontDomain
+                - domain: !ImportValue GhostALBDNS
             - Name: database__client
               Value: mysql
             - Name: database__connection__host
@@ -52,6 +52,7 @@ Resources:
       DesiredCount: 2  # 2 instances for better fault tolerance
       LaunchType: FARGATE  # ECS manages compute infrastructure (vs. EC2)
       EnableExecuteCommand: true
+      HealthCheckGracePeriodSeconds: 60
       DeploymentController:
         Type: ECS
       DeploymentConfiguration:

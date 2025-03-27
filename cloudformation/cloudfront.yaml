@@ -8,7 +8,6 @@ Resources:
       DistributionConfig:
         Enabled: true
         Comment: "CloudFront distribution for Ghost Blog"
-        DefaultRootObject: "index.html"
         Origins:
           - Id: GhostALBOrigin
             DomainName: !ImportValue GhostALBDNS  # ALB DNS name

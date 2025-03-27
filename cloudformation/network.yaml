@@ -1,6 +1,15 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "VPC and networking resources for ECS Fargate and Aurora RDS"
 
+
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, test, prod]
+
+
 Resources:
 
   GhostVPC:
@@ -11,7 +20,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: ghost-vpc
+          Value: ${Environment}-ghost-vpc
 
   # Internet Gateway attached to VPC because Fargate needs to download Docker images
   InternetGateway:
@@ -32,7 +41,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: ghost-public-subnet-1
+          Value: ${Environment}-ghost-public-subnet-1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -43,7 +52,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: ghost-public-subnet-2
+          Value: ${Environment}-ghost-public-subnet-2
 
   # Security groups
   # App Security Group for ECS tasks
@@ -90,7 +99,7 @@ Resources:
       VpcId: !Ref GhostVPC
       Tags:
         - Key: Name
-          Value: ghost-public-route-table
+          Value: ${Environment}-ghost-public-route-table
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -122,7 +131,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: ghost-private-subnet-1
+          Value: ${Environment}-ghost-private-subnet-1
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -133,7 +142,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: ghost-private-subnet-2
+          Value: ${Environment}-ghost-private-subnet-2
 
   # SG for VPC Endpoint to access Secrets Manager from ECS tasks
   SecretsManagerVPCEndpointSG:
@@ -148,7 +157,7 @@ Resources:
           SourceSecurityGroupId: !Ref AppSecurityGroup
       Tags:
         - Key: Name
-          Value: ghost-secrets-manager-vpc-sg
+          Value: ${Environment}-ghost-secrets-manager-vpc-sg
 
   SecretsManagerVPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -183,7 +192,7 @@ Resources:
       VpcId: !Ref GhostVPC
       Tags:
         - Key: Name
-          Value: ghost-private-route-table
+          Value: ${Environment}-ghost-private-route-table
 
   PrivateRoute:
     Type: AWS::EC2::Route
