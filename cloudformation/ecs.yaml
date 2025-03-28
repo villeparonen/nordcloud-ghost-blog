@@ -1,15 +1,24 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: ECS Fargate Cluster for Ghost Blog
 
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, test, prod]
+
 Resources:
 
-  # ECS Cluster (Fargate)
   GhostEcsCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: ghost-blog-cluster
+      ClusterName: !Sub "${Environment}-ghost-blog-cluster"
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-blog-cluster"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # IAM Role for ECS Fargate task execution
   ECSExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -51,8 +60,12 @@ Resources:
                   - ecr:GetDownloadUrlForLayer
                   - ecr:BatchGetImage
                 Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ecs-execution-role"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # IAM Role for ECS application container (task role)
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -65,7 +78,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore  # Required for Session Manager (exec access)
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: GhostTaskPolicy
           PolicyDocument:
@@ -82,12 +95,16 @@ Resources:
                   - secretsmanager:GetSecretValue
                   - ssm:GetParameter
                 Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ecs-task-role"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # CloudWatch Log Group for ECS service
   GhostLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: "/ecs/ghost-blog"
+      LogGroupName: !Sub "/ecs/${Environment}-ghost-blog"
       RetentionInDays: 14
 
 Outputs:
@@ -96,16 +113,16 @@ Outputs:
     Description: "Name of the ECS Fargate cluster"
     Value: !Ref GhostEcsCluster
     Export:
-      Name: ECSClusterName
+      Name: !Sub "${Environment}-ECSClusterName"
 
   ECSExecutionRoleArn:
-    Description: "ARN of ECS Execution Role (used when deploying ECS service)"
+    Description: "ARN of ECS Execution Role"
     Value: !GetAtt ECSExecutionRole.Arn
     Export:
-      Name: ECSExecutionRoleArn
+      Name: !Sub "${Environment}-ECSExecutionRoleArn"
 
   ECSTaskRoleArn:
-    Description: "ARN of ECS Task Role (used by containers)"
+    Description: "ARN of ECS Task Role"
     Value: !GetAtt ECSTaskRole.Arn
     Export:
-      Name: ECSTaskRoleArn
+      Name: !Sub "${Environment}-ECSTaskRoleArn"

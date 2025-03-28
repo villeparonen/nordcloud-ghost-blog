@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Application Load Balancer & Target Group for Ghost Blog
 
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, test, prod]
+
 Resources:
   # ALB (Application Load Balancer)
   GhostALB:
@@ -17,7 +23,11 @@ Resources:
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: "60"
-    DeletionPolicy: Delete
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-alb"
+        - Key: Environment
+          Value: !Ref Environment
 
   # Target Group for ECS tasks
   GhostTargetGroup:
@@ -33,6 +43,11 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-target-group"
+        - Key: Environment
+          Value: !Ref Environment
 
   # HTTP Listener only
   GhostALBListener:
@@ -54,16 +69,16 @@ Outputs:
     Description: "ARN of the ALB"
     Value: !Ref GhostALB
     Export:
-      Name: GhostALBArn
+      Name: !Sub "${Environment}-GhostALBArn"
 
   ALBDNS:
     Description: "DNS name of the ALB"
     Value: !GetAtt GhostALB.DNSName
     Export:
-      Name: GhostALBDNS
+      Name: !Sub "${Environment}-GhostALBDNS"
 
   TargetGroupArn:
     Description: "ARN of the Target Group"
     Value: !Ref GhostTargetGroup
     Export:
-      Name: GhostTargetGroupArn
+      Name: !Sub "${Environment}-GhostTargetGroupArn"

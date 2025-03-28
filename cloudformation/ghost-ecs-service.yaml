@@ -18,8 +18,8 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !ImportValue ECSExecutionRoleArn
-      TaskRoleArn: !ImportValue ECSTaskRoleArn
+      ExecutionRoleArn: !ImportValue "${Environment}-ECSExecutionRoleArn"
+      TaskRoleArn: !ImportValue "${Environment}-ECSTaskRoleArn"
       ContainerDefinitions:
         - Name: ghost-container
           Image: ghost:5-alpine
@@ -29,11 +29,11 @@ Resources:
             - Name: url
               Value: !Sub
                 - "http://${domain}"
-                - domain: !ImportValue GhostALBDNS
+                - domain: !ImportValue "${Environment}-GhostALBDNS"
             - Name: database__client
               Value: mysql
             - Name: database__connection__host
-              Value: !ImportValue GhostAuroraEndpoint
+              Value: !ImportValue "${Environment}-GhostAuroraEndpoint"
             - Name: database__connection__database
               Value: ghost
           LogConfiguration:
@@ -59,7 +59,7 @@ Resources:
     Type: AWS::ECS::Service
     Properties:
       ServiceName: !Sub "${Environment}-ghost-blog-service"
-      Cluster: !ImportValue ECSClusterName
+      Cluster: !ImportValue "${Environment}-ECSClusterName"
       TaskDefinition: !Ref GhostTaskDefinition
       DesiredCount: 2
       LaunchType: FARGATE
@@ -74,13 +74,13 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           SecurityGroups:
-            - !ImportValue GhostAppSecurityGroupId
-            - !ImportValue GhostSecretsManagerVPCEndpointSGId
+            - !ImportValue "${Environment}-GhostAppSecurityGroupId"
+            - !ImportValue "${Environment}-GhostSecretsManagerVPCEndpointSGId"
           Subnets:
-            - !ImportValue GhostPrivateSubnet1Id
-            - !ImportValue GhostPrivateSubnet2Id
+            - !ImportValue "${Environment}-GhostPrivateSubnet1Id"
+            - !ImportValue "${Environment}-GhostPrivateSubnet2Id"
       LoadBalancers:
-        - TargetGroupArn: !ImportValue GhostTargetGroupArn
+        - TargetGroupArn: !ImportValue "${Environment}-GhostTargetGroupArn"
           ContainerName: ghost-container
           ContainerPort: 2368
     Tags:
