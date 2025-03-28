@@ -1,14 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "VPC and networking resources for ECS Fargate and Aurora RDS"
 
-
-
 Parameters:
   Environment:
     Type: String
     Default: dev
     AllowedValues: [dev, test, prod]
-
 
 Resources:
 
@@ -20,11 +17,18 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: ${Environment}-ghost-vpc
+          Value: !Sub "${Environment}-ghost-vpc"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # Internet Gateway attached to VPC because Fargate needs to download Docker images
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-igw"
+        - Key: Environment
+          Value: !Ref Environment
 
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -41,7 +45,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: ${Environment}-ghost-public-subnet-1
+          Value: !Sub "${Environment}-ghost-public-subnet-1"
+        - Key: Environment
+          Value: !Ref Environment
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -52,10 +58,10 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: ${Environment}-ghost-public-subnet-2
+          Value: !Sub "${Environment}-ghost-public-subnet-2"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # Security groups
-  # App Security Group for ECS tasks
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -65,9 +71,13 @@ Resources:
         - IpProtocol: tcp
           FromPort: 2368
           ToPort: 2368
-          CidrIp: 0.0.0.0/0  # Ghost blog HTTP open to everyone. TODO: restrict!
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-app-sg"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # DB Security Group (only accepts traffic from app SG)
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -78,8 +88,12 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref AppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-db-sg"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # Security Group for ALB
   GhostALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -89,24 +103,29 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0  # TODO: restrict this later
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-alb-sg"
+        - Key: Environment
+          Value: !Ref Environment
 
-
-  # Route table for public subnets (internet-bound traffic)
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref GhostVPC
       Tags:
         - Key: Name
-          Value: ${Environment}-ghost-public-route-table
+          Value: !Sub "${Environment}-ghost-public-route-table"
+        - Key: Environment
+          Value: !Ref Environment
 
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachInternetGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: "0.0.0.0/0"  # TODO: review this later
+      DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref InternetGateway
 
   PublicSubnet1RouteTableAssociation:
@@ -121,7 +140,6 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  # Private subnets for RDS
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -131,7 +149,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: ${Environment}-ghost-private-subnet-1
+          Value: !Sub "${Environment}-ghost-private-subnet-1"
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -142,9 +162,10 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: ${Environment}-ghost-private-subnet-2
+          Value: !Sub "${Environment}-ghost-private-subnet-2"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # SG for VPC Endpoint to access Secrets Manager from ECS tasks
   SecretsManagerVPCEndpointSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -157,7 +178,9 @@ Resources:
           SourceSecurityGroupId: !Ref AppSecurityGroup
       Tags:
         - Key: Name
-          Value: ${Environment}-ghost-secrets-manager-vpc-sg
+          Value: !Sub "${Environment}-ghost-secrets-manager-vpc-sg"
+        - Key: Environment
+          Value: !Ref Environment
 
   SecretsManagerVPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -172,27 +195,31 @@ Resources:
         - !Ref SecretsManagerVPCEndpointSG
       PrivateDnsEnabled: true
 
-  # NAT Gateway for ECS Fargate to download Docker images
   GhostNATGateway:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt GhostEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-nat-gateway"
+        - Key: Environment
+          Value: !Ref Environment
 
-  # Elastic IP for NAT Gateway
   GhostEIP:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
 
-  # Private route table with NAT
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref GhostVPC
       Tags:
         - Key: Name
-          Value: ${Environment}-ghost-private-route-table
+          Value: !Sub "${Environment}-ghost-private-route-table"
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateRoute:
     Type: AWS::EC2::Route
@@ -214,58 +241,80 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
+
+  GhostLambdaCodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::AccountId}-${Environment}-ghostblog-deleteposts-code"
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghostblog-deleteposts-code"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: "Ghost blog Lambda function for deleting all posts"
+        - Key: Project
+          Value: "GhostBlog"
+
+
 Outputs:
 
   SecretsManagerVPCEndpointSGId:
     Description: "SG ID for Secrets Manager VPC Endpoint"
     Value: !Ref SecretsManagerVPCEndpointSG
     Export:
-      Name: GhostSecretsManagerVPCEndpointSGId
+      Name: !Sub "${Environment}-GhostSecretsManagerVPCEndpointSGId"
 
   VPCId:
     Description: "VPC ID"
     Value: !Ref GhostVPC
     Export:
-      Name: GhostVPCId
+      Name: !Sub "${Environment}-GhostVPCId"
 
   PublicSubnet1Id:
     Description: "Public Subnet 1"
     Value: !Ref PublicSubnet1
     Export:
-      Name: GhostPublicSubnet1Id
+      Name: !Sub "${Environment}-GhostPublicSubnet1Id"
 
   PublicSubnet2Id:
     Description: "Public Subnet 2"
     Value: !Ref PublicSubnet2
     Export:
-      Name: GhostPublicSubnet2Id
+      Name: !Sub "${Environment}-GhostPublicSubnet2Id"
 
   PrivateSubnet1Id:
     Description: "Private Subnet 1"
     Value: !Ref PrivateSubnet1
     Export:
-      Name: GhostPrivateSubnet1Id
+      Name: !Sub "${Environment}-GhostPrivateSubnet1Id"
 
   PrivateSubnet2Id:
     Description: "Private Subnet 2"
     Value: !Ref PrivateSubnet2
     Export:
-      Name: GhostPrivateSubnet2Id
+      Name: !Sub "${Environment}-GhostPrivateSubnet2Id"
 
   GhostALBSecurityGroupId:
     Description: "SG ID for ALB"
     Value: !Ref GhostALBSecurityGroup
     Export:
-      Name: GhostALBSecurityGroupId
+      Name: !Sub "${Environment}-GhostALBSecurityGroupId"
 
   AppSecurityGroupId:
     Description: "App Security Group ID"
     Value: !Ref AppSecurityGroup
     Export:
-      Name: GhostAppSecurityGroupId
+      Name: !Sub "${Environment}-GhostAppSecurityGroupId"
 
   DBSecurityGroupId:
     Description: "Aurora DB Security Group ID"
     Value: !Ref DBSecurityGroup
     Export:
-      Name: GhostDBSecurityGroupId
+      Name: !Sub "${Environment}-GhostDBSecurityGroupId"
+
+  GhostLambdaCodeBucketName:
+    Description: "S3 bucket used to store Lambda code for deleting Ghost blog posts"
+    Value: !Ref GhostLambdaCodeBucket
+    Export:
+      Name: !Sub "${Environment}-GhostLambdaCodeBucketName"

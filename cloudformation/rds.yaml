@@ -1,16 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Aurora MySQL RDS Cluster for Ghost Blog
 
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, test, prod]
+
 Resources:
 
   # Aurora Subnet Group (required to deploy across multiple Availability Zones)
   GhostDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: "Aurora Subnet Group"
+      DBSubnetGroupDescription: !Sub "${Environment} Aurora Subnet Group"
       SubnetIds:
-        - !ImportValue GhostPrivateSubnet1Id
-        - !ImportValue GhostPrivateSubnet2Id
+        - !ImportValue "${Environment}-GhostPrivateSubnet1Id"
+        - !ImportValue "${Environment}-GhostPrivateSubnet2Id"
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-db-subnet-group"
+        - Key: Environment
+          Value: !Ref Environment
 
   # Aurora DB Cluster (stores the actual data)
   GhostAuroraCluster:
@@ -22,11 +33,16 @@ Resources:
       MasterUserPassword: !Sub "{{resolve:secretsmanager:GhostDBCredentials:SecretString:password}}"
       DBSubnetGroupName: !Ref GhostDBSubnetGroup
       VpcSecurityGroupIds:
-        - !ImportValue GhostDBSecurityGroupId
+        - !ImportValue "${Environment}-GhostDBSecurityGroupId"
       BackupRetentionPeriod: 1  # Retain snapshots for 1 day (minimal cost)
       PreferredBackupWindow: "03:00-04:00"
       StorageEncrypted: true
       DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-db-cluster"
+        - Key: Environment
+          Value: !Ref Environment
 
   # Aurora DB Instance (smallest and cheapest for MVP)
   GhostAuroraInstance:
@@ -37,6 +53,11 @@ Resources:
       DBInstanceClass: db.t4g.medium
       Engine: aurora-mysql
       PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-db-instance"
+        - Key: Environment
+          Value: !Ref Environment
 
 Outputs:
 
@@ -44,4 +65,4 @@ Outputs:
     Description: "Aurora DB endpoint used by ECS app"
     Value: !GetAtt GhostAuroraCluster.Endpoint.Address
     Export:
-      Name: GhostAuroraEndpoint
+      Name: !Sub "${Environment}-GhostAuroraEndpoint"
