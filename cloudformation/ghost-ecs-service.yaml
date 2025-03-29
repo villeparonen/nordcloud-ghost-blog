@@ -9,6 +9,17 @@ Parameters:
     AllowedValues: [dev, test, prod]
 
 Resources:
+  GhostLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/ghost-blog
+      RetentionInDays: 7
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: !Sub "${Environment}-ghost-log-group"
+          
   GhostTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -18,8 +29,12 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !ImportValue "${Environment}-ECSExecutionRoleArn"
-      TaskRoleArn: !ImportValue "${Environment}-ECSTaskRoleArn"
+      ExecutionRoleArn:
+        Fn::ImportValue:
+          Fn::Sub: "${Environment}-ECSExecutionRoleArn"
+      TaskRoleArn:
+        Fn::ImportValue:
+          Fn::Sub: "${Environment}-ECSTaskRoleArn"
       ContainerDefinitions:
         - Name: ghost-container
           Image: ghost:5-alpine
@@ -29,11 +44,15 @@ Resources:
             - Name: url
               Value: !Sub
                 - "http://${domain}"
-                - domain: !ImportValue "${Environment}-GhostALBDNS"
+                - domain:
+                    Fn::ImportValue:
+                      Fn::Sub: "${Environment}-GhostALBDNS"
             - Name: database__client
               Value: mysql
             - Name: database__connection__host
-              Value: !ImportValue "${Environment}-GhostAuroraEndpoint"
+              Value:
+                Fn::ImportValue:
+                  Fn::Sub: "${Environment}-GhostAuroraEndpoint"
             - Name: database__connection__database
               Value: ghost
           LogConfiguration:
@@ -49,17 +68,14 @@ Resources:
               ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GhostDBCredentials:password::"
           RepositoryCredentials:
             CredentialsParameter: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:DockerHubCredentials"
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Name
-          Value: !Sub "${Environment}-ghost-task-definition"
 
   GhostEcsService:
     Type: AWS::ECS::Service
     Properties:
       ServiceName: !Sub "${Environment}-ghost-blog-service"
-      Cluster: !ImportValue "${Environment}-ECSClusterName"
+      Cluster:
+        Fn::ImportValue:
+          Fn::Sub: "${Environment}-ECSClusterName"
       TaskDefinition: !Ref GhostTaskDefinition
       DesiredCount: 2
       LaunchType: FARGATE
@@ -74,20 +90,21 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           SecurityGroups:
-            - !ImportValue "${Environment}-GhostAppSecurityGroupId"
-            - !ImportValue "${Environment}-GhostSecretsManagerVPCEndpointSGId"
+            - Fn::ImportValue:
+                Fn::Sub: "${Environment}-GhostAppSecurityGroupId"
+            - Fn::ImportValue:
+                Fn::Sub: "${Environment}-GhostSecretsManagerVPCEndpointSGId"
           Subnets:
-            - !ImportValue "${Environment}-GhostPrivateSubnet1Id"
-            - !ImportValue "${Environment}-GhostPrivateSubnet2Id"
+            - Fn::ImportValue:
+                Fn::Sub: "${Environment}-GhostPrivateSubnet1Id"
+            - Fn::ImportValue:
+                Fn::Sub: "${Environment}-GhostPrivateSubnet2Id"
       LoadBalancers:
-        - TargetGroupArn: !ImportValue "${Environment}-GhostTargetGroupArn"
+        - TargetGroupArn:
+            Fn::ImportValue:
+              Fn::Sub: "${Environment}-GhostTargetGroupArn"
           ContainerName: ghost-container
           ContainerPort: 2368
-    Tags:
-      - Key: Environment
-        Value: !Ref Environment
-      - Key: Name
-        Value: !Sub "${Environment}-ghost-ecs-service"
 
 Outputs:
   ECSServiceName:

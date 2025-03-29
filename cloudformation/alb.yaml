@@ -16,10 +16,13 @@ Resources:
       Type: application
       IpAddressType: ipv4
       SecurityGroups:
-        - !ImportValue GhostALBSecurityGroupId
+        - Fn::ImportValue:
+            Fn::Sub: "${Environment}-GhostALBSecurityGroupId"
       Subnets:
-        - !ImportValue GhostPublicSubnet1Id
-        - !ImportValue GhostPublicSubnet2Id
+        - Fn::ImportValue:
+            Fn::Sub: "${Environment}-GhostPublicSubnet1Id"
+        - Fn::ImportValue:
+            Fn::Sub: "${Environment}-GhostPublicSubnet2Id"
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: "60"
@@ -35,7 +38,9 @@ Resources:
     Properties:
       Port: 2368
       Protocol: HTTP
-      VpcId: !ImportValue GhostVPCId
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${Environment}-GhostVPCId"
       TargetType: ip
       HealthCheckProtocol: HTTP
       HealthCheckPath: "/favicon.ico"

@@ -15,8 +15,10 @@ Resources:
     Properties:
       DBSubnetGroupDescription: !Sub "${Environment} Aurora Subnet Group"
       SubnetIds:
-        - !ImportValue "${Environment}-GhostPrivateSubnet1Id"
-        - !ImportValue "${Environment}-GhostPrivateSubnet2Id"
+        - Fn::ImportValue: 
+            Fn::Sub: "${Environment}-GhostPrivateSubnet1Id"
+        - Fn::ImportValue: 
+            Fn::Sub: "${Environment}-GhostPrivateSubnet2Id"
       Tags:
         - Key: Name
           Value: !Sub "${Environment}-ghost-db-subnet-group"
@@ -33,8 +35,9 @@ Resources:
       MasterUserPassword: !Sub "{{resolve:secretsmanager:GhostDBCredentials:SecretString:password}}"
       DBSubnetGroupName: !Ref GhostDBSubnetGroup
       VpcSecurityGroupIds:
-        - !ImportValue "${Environment}-GhostDBSecurityGroupId"
-      BackupRetentionPeriod: 1  # Retain snapshots for 1 day (minimal cost)
+        - Fn::ImportValue: 
+            Fn::Sub: "${Environment}-GhostDBSecurityGroupId"
+      BackupRetentionPeriod: 1
       PreferredBackupWindow: "03:00-04:00"
       StorageEncrypted: true
       DeletionProtection: false
@@ -44,7 +47,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Aurora DB Instance (smallest and cheapest for MVP)
+  # Aurora DB Instance
   GhostAuroraInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
