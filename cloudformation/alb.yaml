@@ -14,6 +14,7 @@ Resources:
     Properties:
       Scheme: internet-facing
       Type: application
+      LoadBalancerName: !Sub "${Environment}-ghost-alb"
       IpAddressType: ipv4
       SecurityGroups:
         - Fn::ImportValue:
