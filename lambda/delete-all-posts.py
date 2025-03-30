@@ -10,34 +10,38 @@ def lambda_handler(event, context):
     secret_dict = json.loads(secret['SecretString'])
 
     api_key = secret_dict['key']
-    admin_url = secret_dict['admin_url']
-
-    # Remove trailing slash just in case
-    admin_url = admin_url.rstrip('/')
+    admin_url = secret_dict['admin_url'].rstrip('/')
 
     headers = {
         'Authorization': f'Ghost {api_key}',
         'Content-Type': 'application/json'
     }
 
-    # Get all posts
+    # Try fetching posts
     try:
-        response = requests.get(f"{admin_url}/ghost/api/v3/admin/posts/?limit=all", headers=headers)
+        url = f"{admin_url}/ghost/api/v3/admin/posts/?limit=all"
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         posts = response.json().get('posts', [])
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         return {
-            "error": f"Failed to fetch posts: {str(e)}"
+            "error": f"Failed to fetch posts",
+            "url": url,
+            "status_code": getattr(response, 'status_code', 'N/A'),
+            "response_text": getattr(response, 'text', 'No response'),
+            "exception": str(e)
         }
 
-    # Delete all posts
+    # Delete posts
     deleted = 0
     for post in posts:
         try:
-            del_response = requests.delete(f"{admin_url}/ghost/api/v3/admin/posts/{post['id']}/", headers=headers)
+            del_url = f"{admin_url}/ghost/api/v3/admin/posts/{post['id']}/"
+            del_response = requests.delete(del_url, headers=headers)
             del_response.raise_for_status()
             deleted += 1
         except Exception as e:
+            print(f"Failed to delete post {post['id']}: {str(e)}")
             continue
 
     return {
