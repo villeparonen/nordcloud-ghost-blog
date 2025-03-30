@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Lambda function to delete all posts from Ghost Blog
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, test, prod]
+
+Resources:
+
+  GhostDeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Environment}-GhostDeleteLambdaRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowSecretsAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GhostAdminAPIKey*"
+        - PolicyName: AllowCloudWatchLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  GhostDeletePostsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-GhostDeletePosts"
+      Runtime: python3.12
+      Handler: delete-all-posts.lambda_handler
+      Role: !GetAtt GhostDeleteLambdaRole.Arn
+      Timeout: 30
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            Fn::Sub: "${Environment}-GhostLambdaCodeBucketName"
+        S3Key: "delete-all-posts.zip"
+
+Outputs:
+
+  GhostDeletePostsLambdaArn:
+    Description: "Lambda function ARN"
+    Value: !GetAtt GhostDeletePostsFunction.Arn
+    Export:
+      Name: GhostDeletePostsLambdaArn
