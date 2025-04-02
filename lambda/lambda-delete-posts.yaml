@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Lambda function to delete all posts from Ghost Blog
+Description: Lambda function to delete all posts from Ghost Blogs
 
 Parameters:
   Environment:
@@ -40,11 +40,12 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "*"
 
+
   GhostDeletePostsFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${Environment}-GhostDeletePosts"
-      Runtime: python3.12
+      Runtime: python3.11
       Handler: delete-all-posts.lambda_handler
       Role: !GetAtt GhostDeleteLambdaRole.Arn
       Timeout: 30
@@ -53,6 +54,8 @@ Resources:
           Fn::ImportValue:
             Fn::Sub: "${Environment}-GhostLambdaCodeBucketName"
         S3Key: "delete-all-posts.zip"
+      Layers:
+        - arn:aws:lambda:eu-north-1:722208634435:layer:ghost-layer-pyjwt:1
 
 Outputs:
 

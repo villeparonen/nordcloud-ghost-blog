@@ -37,7 +37,7 @@ Resources:
           Fn::Sub: "${Environment}-ECSTaskRoleArn"
       ContainerDefinitions:
         - Name: ghost-container
-          Image: ghost:5-alpine
+          Image: 722208634435.dkr.ecr.eu-north-1.amazonaws.com/ghost:5-alpine
           PortMappings:
             - ContainerPort: 2368
           Environment:
@@ -66,8 +66,6 @@ Resources:
               ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GhostDBCredentials:username::"
             - Name: database__connection__password
               ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GhostDBCredentials:password::"
-          RepositoryCredentials:
-            CredentialsParameter: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:DockerHubCredentials"
 
   GhostEcsService:
     Type: AWS::ECS::Service
